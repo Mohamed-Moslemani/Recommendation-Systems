@@ -15,21 +15,23 @@ class AnimeRecommender:
         self.train_model(factors=20, regularization=0.1, iterations=20, use_gpu=False)
         
     def preprocess_data(self):
+        all_anime_ids = pd.concat([self.anime_data['anime_id'], self.ratings_data['anime_id']]).unique()
+        self.anime_ids = all_anime_ids
+        self.anime_id_to_idx = {anime_id: idx for idx, anime_id in enumerate(self.anime_ids)}
+        self.idx_to_anime_id = {idx: anime_id for idx, anime_id in enumerate(self.anime_ids)}
+        self.ratings_data['anime_idx'] = self.ratings_data['anime_id'].map(self.anime_id_to_idx)
         self.user_ids = self.ratings_data['user_id'].unique()
         self.user_id_to_idx = {user_id: idx for idx, user_id in enumerate(self.user_ids)}
-        self.idx_to_user_id = {idx: user_id for user_id, idx in self.user_id_to_idx.items()}
+        self.idx_to_user_id = {idx: user_id for idx, user_id in enumerate(self.user_ids)}
         self.ratings_data['user_idx'] = self.ratings_data['user_id'].map(self.user_id_to_idx)
-        all_anime_ids = pd.concat([self.anime_data['anime_id'], self.ratings_data['anime_id']]).unique()
-        self.anime_id_to_idx = {anime_id: idx for idx, anime_id in enumerate(all_anime_ids)}
-        self.idx_to_anime_id = {idx: anime_id for anime_id, idx in self.anime_id_to_idx.items()}
-        self.ratings_data['anime_idx'] = self.ratings_data['anime_id'].map(self.anime_id_to_idx)
         self.ratings_data['confidence'] = self.ratings_data['rating'].apply(self.get_confidence)
         num_users = len(self.user_ids)
-        num_items = len(all_anime_ids)
+        num_items = len(self.anime_ids)
         self.interaction_matrix = csr_matrix(
             (self.ratings_data['confidence'], (self.ratings_data['user_idx'], self.ratings_data['anime_idx'])),
             shape=(num_users, num_items)
         )
+
 
     @staticmethod
     def get_confidence(rating):
@@ -57,22 +59,34 @@ class AnimeRecommender:
         if not selected_anime_idx:
             print("No valid anime IDs provided.")
             return None
+        
         selected_item_factors = self.model.item_factors[selected_anime_idx]
         user_vector = np.mean(selected_item_factors, axis=0)
         scores = self.model.item_factors.dot(user_vector)
         top_indices = np.argsort(-scores)
-        top_indices = [idx for idx in top_indices if idx not in selected_anime_idx][:N]
-        recommended_anime_ids = [self.idx_to_anime_id[idx] for idx in top_indices]
+        top_indices = [idx for idx in top_indices if idx not in selected_anime_idx]
+        recommended_anime_ids = []
+        for idx in top_indices:
+            anime_id = self.idx_to_anime_id.get(idx)
+            if anime_id:
+                recommended_anime_ids.append(anime_id)
+            if len(recommended_anime_ids) == N:
+                break
+        
+        if not recommended_anime_ids:
+            print("No recommendations found.")
+            return None
         recommended_anime = self.anime_data[self.anime_data['anime_id'].isin(recommended_anime_ids)].copy()
         
         if recommended_anime.empty:
+            print("No recommended anime found in anime data.")
             return None
-
-        anime_id_to_score = {self.idx_to_anime_id[idx]: scores[idx] for idx in top_indices}
+        
+        anime_id_to_score = {self.idx_to_anime_id[idx]: scores[idx] for idx in top_indices if idx in self.idx_to_anime_id}
         recommended_anime['score'] = recommended_anime['anime_id'].map(anime_id_to_score)
         recommended_anime = recommended_anime.dropna(subset=['score'])
         recommended_anime = recommended_anime.sort_values(by='score', ascending=False)
-        
+    
         return recommended_anime[['anime_id', 'name', 'genre', 'type', 'episodes', 'rating', 'members', 'score']]
 
     def get_popular_anime(self, N=100):
