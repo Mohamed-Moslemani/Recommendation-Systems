@@ -1,6 +1,3 @@
-# Updating the README content to be general for the "Recommendation-Systems" repository
-
-readme_content_recommendation_general = """
 # 🎬 Recommendation Systems 🎬
 
 Welcome to **Recommendation Systems** – a repository dedicated to the exciting world of personalized recommendations! From movies and animations to new fields yet to come, this collection dives into the algorithms that help suggest the right content to the right person at the right time. 🍿✨
