@@ -8,19 +8,20 @@ import seaborn as sns
 spark = SparkSession.builder \
         .appName("RecommendationSystemMovies") \
         .master("local[*]") \
-        .config("spark.driver.bindAddress", "127.0.0.1") \
+        .config("spark.executor.memory", "4g") \
         .getOrCreate()  
+spark.sparkContext.setLogLevel("ERROR")
 
-file_path = 'data//Netflix_User_Ratings.csv'
-df = spark.read.csv(file_path,header=True,inferSchema=True)
+file_path= 'data//Netflix_User_Ratings.csv'
+df= spark.read.csv(file_path,header=True,inferSchema=True)
 
 def nulls_counter(df):
-    null_counts = df.select([sum(col(column).isNull().cast("int")).alias(column) for column in df.columns])
+    null_counts= df.select([sum(col(column).isNull().cast("int")).alias(column) for column in df.columns])
     null_counts.show()
 
 def shapeChecker(df):
-    nrows = df.count()
-    ncols = len(df.columns)
+    nrows= df.count()
+    ncols= len(df.columns)
 
     return [nrows,ncols]
 
@@ -62,8 +63,8 @@ def plot_ratings_distribution(df: DataFrame):
     Returns:
     - None
     """
-    ratings_dist = df.groupBy("Rating").count().orderBy("Rating")
-    ratings_dist_pd = ratings_dist.toPandas()
+    ratings_dist= df.groupBy("Rating").count().orderBy("Rating")
+    ratings_dist_pd= ratings_dist.toPandas()
     
     ratings_dist_pd.plot(kind='bar', x='Rating', y='count', legend=False)
     plt.title("Distribution of Ratings")
@@ -71,9 +72,33 @@ def plot_ratings_distribution(df: DataFrame):
     plt.ylabel("Count")
     plt.show()
 
+def filter_popular_movies_and_active_users(df:DataFrame,min_movie_ratings: int,min_user_ratings: int)-> DataFrame:
+    """
+    Filters Dataframe to keep popular movies and active users. 
+    Parameters:
+    - df: Spark DataFrame 
+    - min_movie_ratings: Min # of ratings for a movie to be included. 
+    - min_user_ratings: Min # of ratings for a users to be included.
+    Returns:
+    - Filtered spark dataframe with threshold filtering. 
+    """
 
-load_data(df)
-plot_ratings_distribution(df=df)
+    movie_ratings_count= df.groupBy("MovieId").count().withColumnRenamed("count", "movie_ratings_count")
+    popular_movies= movie_ratings_count.filter(col("movie_ratings_count") >= min_movie_ratings)
+
+    user_ratings_count = df.groupBy("CustId").count().withColumnRenamed("count", "user_ratings_count")
+    active_users= user_ratings_count.filter(col("user_ratings_count") >= min_user_ratings)
+
+    filtered_df= df.join(popular_movies, on="MovieId", how="inner") \
+                    .join(active_users, on="CustId", how="inner")
+    print("----------------------------------")
+    filtered_df.show()
+    return filtered_df
+
+df_filtered= filter_popular_movies_and_active_users(df,10,5)
+load_data(df_filtered)
+print(df_filtered.count() - df.count())
+plot_ratings_distribution(df=df_filtered)
 
 
 
