@@ -3,7 +3,8 @@ import pandas as pd
 from pyspark.sql.functions import *
 import matplotlib.pyplot as plt 
 import seaborn as sns 
-
+from pyspark.ml.evaluation import RegressionEvaluator
+from pyspark.ml.recommendation import ALS
 
 spark = SparkSession.builder \
         .appName("RecommendationSystemMovies") \
@@ -53,7 +54,7 @@ def load_data(df):
     print("-"*50)
     
 
-def plot_ratings_distribution(df: DataFrame):
+def plot_ratings_distribution(df:DataFrame):
     """
     Plots the distribution of ratings in a Spark DataFrame.
 
@@ -95,10 +96,26 @@ def filter_popular_movies_and_active_users(df:DataFrame,min_movie_ratings: int,m
     filtered_df.show()
     return filtered_df
 
+
+def traintestSplitter(df: DataFrame, test_size: float = 0.2):
+    """
+    Data splitting to train and test
+    Parameters:
+    -df: Spark DataFrame to undergo splitting
+    -test_size: test size in %.
+
+    Returns:
+    - train_df, test_df: Spark DataFrames 
+    """
+    train_df, test_df= df.randomSplit([1-test_size,test_size], seed=42)
+    return train_df, test_df
+
 df_filtered= filter_popular_movies_and_active_users(df,10,5)
 load_data(df_filtered)
+print("%%%"*30)
 print(df_filtered.count() - df.count())
+print("%%%"*30)
 plot_ratings_distribution(df=df_filtered)
-
+train_df, test_df= traintestSplitter(df_filtered)
 
 
